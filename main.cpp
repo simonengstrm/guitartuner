@@ -1,87 +1,34 @@
 #include <fstream>
 #include <iostream>
 #include "portaudio.h"
+#include "freq_analysis.h"
 
-#define PA_SAMPLE_TYPE paInt16
-typedef short SAMPLE;
+#define SAMPLES_PER_FFT 4096
+
+#define PA_SAMPLE_TYPE paFloat32
+typedef float SAMPLE;
 
 using std::cout, std::endl;
 
 typedef struct bufData {
     SAMPLE* recording;
-    int frameIndex;
-    int maxFrameIndex;
-} recordingData;
+} inStreamData;
 
 static int paRecordCallback(const void *inputBuffer, void *outputBuffer,
                      unsigned long framesPerBuffer,
                      const PaStreamCallbackTimeInfo *timeInfo,
                      PaStreamCallbackFlags statusFlags,
                      void *userData) {
-    recordingData *data = (recordingData*)userData;
+    inStreamData *data = (inStreamData*)userData;
     const SAMPLE *rptr = (const SAMPLE*)inputBuffer;
-    SAMPLE *wptr = &data->recording[data->frameIndex * 2];
-    unsigned long framesLeft = data->maxFrameIndex - data->frameIndex;
-    unsigned long framesToCalc;
-    int finished = paContinue;
+    SAMPLE *wptr = &data->recording[0];
 
-    if (framesLeft < framesPerBuffer) {
-        framesToCalc= framesLeft; // Prevent overflow
-        finished = paComplete;
-    } else {
-        framesToCalc = framesPerBuffer; // Process all requested frames
-        finished = paContinue;
-    }
-
-    if (inputBuffer == NULL) {
-        for (unsigned long i = 0; i < framesToCalc; i++) {
-            *wptr++ = 0; // Zero out the output buffer
-            *wptr++ = 0;
-        }
-    } else {
-        for (unsigned long i = 0; i < framesToCalc; i++) {
-            *wptr++ = *rptr++; // Copy input to output
-            *wptr++ = *rptr++;
-        }
-    }
-
-    data->frameIndex += framesToCalc;
-    return finished;
-}
-
-static int paPlayCallback(const void *inputBuffer, void *outputBuffer,
-                     unsigned long framesPerBuffer,
-                     const PaStreamCallbackTimeInfo *timeInfo,
-                     PaStreamCallbackFlags statusFlags,
-                     void *userData) {
-    recordingData *data = (recordingData*)userData;
-    SAMPLE *rptr = &data->recording[data->frameIndex * 2];
-    SAMPLE *wptr = (SAMPLE*)outputBuffer;
-    unsigned long framesLeft = data->maxFrameIndex - data->frameIndex;
-
-    int finished = paContinue;
-
-    if (framesLeft < framesPerBuffer) {
-        for (unsigned long i = 0; i < framesLeft; i++) {
-            *wptr++ = *rptr++; // Copy remaining recorded data to output
-            *wptr++ = *rptr++;
-        }
-        // Zero out the rest of the output buffer if not enough frames
-        for (unsigned long i = framesLeft; i < framesPerBuffer; i++) {
-            *wptr++ = 0; // Zero out the output buffer
-            *wptr++ = 0;
-        }
-        data->frameIndex += framesLeft;
-        finished = paComplete; // Mark as complete if no more frames left
-    }
-
-    for (unsigned long i = 0; i < framesPerBuffer; i++) {
-        *wptr++ = *rptr++; // Copy recorded data to output
+    for (unsigned long i = 0; i < SAMPLES_PER_FFT; i++) {
+        *wptr++ = *rptr++; // Copy input to output
         *wptr++ = *rptr++;
     }
-    data->frameIndex += framesPerBuffer;
 
-    return finished;
+    return paComplete;
 }
 
 int main() {
@@ -93,81 +40,50 @@ int main() {
     }
 
     /* ------------ RECORD AUDIO -------------*/
-
-    int record_time = 5; 
-
     PaDeviceIndex device_in = 3;
     const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(device_in);
     cout << "Using device: " << deviceInfo->name << endl;
 
-    recordingData data;
-    data.frameIndex = 0;
-    data.maxFrameIndex = record_time * deviceInfo->defaultSampleRate;
-    int numSamples = data.maxFrameIndex * 2; 
-    int numBytes = numSamples * sizeof(SAMPLE);
+    inStreamData data;
+    int numBytes = SAMPLES_PER_FFT * sizeof(SAMPLE) * 2; // Two channels
     data.recording = (SAMPLE*) malloc(numBytes);
-    for (int i = 0; i < numSamples; i++) {
-        data.recording[i] = 0; // Initialize recording buffer
-    }
+    memset(data.recording, 0, numBytes);
 
-    PaStreamParameters recordParameters;
-    recordParameters.device = device_in;
-    recordParameters.channelCount = 2;
-    recordParameters.sampleFormat = PA_SAMPLE_TYPE;
-    recordParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
-    recordParameters.hostApiSpecificStreamInfo = NULL;
+    PaStreamParameters inStreamParameters;
+    inStreamParameters.device = device_in;
+    inStreamParameters.channelCount = 2; // Dual channel input but only one channel is used
+    inStreamParameters.sampleFormat = PA_SAMPLE_TYPE;
+    inStreamParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
+    inStreamParameters.hostApiSpecificStreamInfo = NULL;
 
     PaStream *inStream;
-    err = Pa_OpenStream(&inStream, &recordParameters, NULL,
-                        deviceInfo->defaultSampleRate, 256, paClipOff,
+    err = Pa_OpenStream(&inStream, &inStreamParameters, NULL,
+                        deviceInfo->defaultSampleRate, SAMPLES_PER_FFT, paClipOff,
                         paRecordCallback, &data);
 
     if (err != paNoError) {
         goto done;
     }
 
-    err = Pa_StartStream(inStream);
-    if (err != paNoError) {
-        goto done;
+    while(true) {
+        // Record audio then call fft on buffer while running
+        err = Pa_StartStream(inStream);
+        if (err != paNoError) {
+            goto done;
+        }
+
+        while(Pa_IsStreamActive(inStream) == 1) {
+            Pa_Sleep(10); // Sleep while recording
+        }
+        
+        err = Pa_StopStream(inStream);
+        if (err != paNoError) {
+            goto done;
+        }
+
+        // Process the recorded data here (e.g., perform FFT)
+        cout << freqAnalysis(data.recording, SAMPLES_PER_FFT, deviceInfo->defaultSampleRate) << " Hz" << endl;
     }
-
-    cout << "Recording for " << record_time << " seconds..." << endl;
-    while( Pa_IsStreamActive(inStream) == 1 ) {
-        Pa_Sleep(1000); // Sleep for 1 second
-    }
-    cout << "Recording complete." << endl;
-
-    err = Pa_CloseStream(inStream);
-    if (err != paNoError) goto done;
-
-    /* --------------- PLAYBACK OF RECORDED AUDIO --------------*/
-    data.frameIndex = 0; // Reset frame index for playback
-    PaStream *playbackStream;
-    PaStreamParameters playbackParameters;
-    playbackParameters.device = Pa_GetDefaultOutputDevice();
-    playbackParameters.channelCount = 2;
-    playbackParameters.sampleFormat = PA_SAMPLE_TYPE;
-    playbackParameters.suggestedLatency = deviceInfo->defaultLowOutputLatency;
-    playbackParameters.hostApiSpecificStreamInfo = NULL;
-
-    err = Pa_OpenStream(&playbackStream, NULL, &playbackParameters, deviceInfo->defaultSampleRate, 256, paClipOff,
-                        paPlayCallback, &data);
-
-    if (err != paNoError) {
-        goto done;
-    }
-
-    err = Pa_StartStream(playbackStream);
-    if (err != paNoError) {
-        goto done;
-    }
-    cout << "Playing back recorded audio..." << endl;
-    while( (err = Pa_IsStreamActive(playbackStream)) == 1 ) {
-        Pa_Sleep(100);
-    }
-    cout << "Playback complete." << endl;
-    err = Pa_CloseStream(playbackStream);
-    if (err != paNoError) goto done;
 
 done:
     free(data.recording);

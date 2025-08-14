@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PortAudio REQUIRED)
 
-add_executable(PitchDetector main.cpp)
+add_executable(PitchDetector main.cpp freq_analysis.h freq_analysis.cpp)
 
 target_include_directories(PitchDetector PRIVATE
     ${portaudio_SOURCE_DIR}/include
