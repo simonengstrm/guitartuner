@@ -69,7 +69,7 @@ float freqAnalysis(const float *buffer, unsigned long bufferSize, int sampleRate
         return 0.0f;
     }
 
-    unsigned long paddedSize = 8192;
+    unsigned long paddedSize = 4096;
 
     std::complex<float>* fftInput = new std::complex<float>[paddedSize];
     for (unsigned long i = 0; i < paddedSize; ++i) {

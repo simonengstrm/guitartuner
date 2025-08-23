@@ -5,98 +5,92 @@
 #include <semaphore>
 
 #include "portaudio.h"
+#include "audio_engine.h"
+#include "config.h"
 
-struct AudioEngine {
+bool AudioEngine::init() {
+    PaError err = Pa_Initialize();
+    if (err != paNoError) {
+        std::cout << "Could not initialize audio engine: " << Pa_GetErrorText(err) << std::endl;
+        return false;
+    }
+    
+    initialized = true;
+    return true;
+}
 
-    bool initialized = false;
-    PaStream* inStream = nullptr;
-    PaStreamParameters inStreamParameters {};
-    float* buffer = nullptr;
+int AudioEngine::findDevice(std::string deviceNameHint) {
+    int deviceCount = Pa_GetDeviceCount();
+    for (int i = 0; i < deviceCount; i++) {
+        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
+        std::string deviceName(deviceInfo->name);
+        if (deviceName.contains(deviceNameHint) && deviceInfo->maxInputChannels > 0) return i;
+    }
+    
+    return paNoDevice;
+}
 
-    // Function for handling buffer full
-    bool init() {
-        PaError err = Pa_Initialize();
-        if (err != paNoError) {
-            std::cout << "Could not initialize audio engine: " << Pa_GetErrorText(err) << std::endl;
-            return false;
-        }
-        
-        initialized = true;
+bool AudioEngine::openStream(int deviceIndex) {
+    if (inStream) {
         return true;
     }
+    const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(deviceIndex);
 
-    int findDevice(std::string deviceNameHint) {
-        int deviceCount = Pa_GetDeviceCount();
-        for (int i = 0; i < deviceCount; i++) {
-            const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
-            std::string deviceName(deviceInfo->name);
-            if (deviceName.contains(deviceNameHint) && deviceInfo->maxInputChannels > 0) return i;
-        }
-        
-        return paNoDevice;
+    buffer = (SAMPLE*) malloc(SAMPLES_PER_FFT * sizeof(SAMPLE));
+    memset(buffer, 0, SAMPLES_PER_FFT * sizeof(SAMPLE));
+
+    inStreamParameters.device = deviceIndex;
+    inStreamParameters.channelCount = deviceInfo->maxInputChannels;
+    inStreamParameters.sampleFormat = PA_SAMPLE_TYPE;
+    inStreamParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
+    inStreamParameters.hostApiSpecificStreamInfo = NULL;
+
+    PaError err = Pa_OpenStream(&inStream, &inStreamParameters, NULL, 
+        deviceInfo->defaultSampleRate, SAMPLES_PER_FFT, paClipOff, 
+        &AudioEngine::paRecordCallback, this);
+    if (err != paNoError) {
+        std::cout << Pa_GetErrorText(err);
+        return false;
     }
 
-    bool openStream(int deviceIndex, unsigned long framesPerBuffer) {
-        if (inStream) {
-            return true;
-        }
+    return true;
+}
 
-        buffer = (float*) malloc(framesPerBuffer * sizeof(float));
+bool AudioEngine::start() {
+    return inStream && Pa_StartStream(inStream) == paNoError;
+}
 
-        const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(deviceIndex);
-        inStreamParameters.device = deviceIndex;
-        inStreamParameters.channelCount = deviceInfo->maxInputChannels;
-        inStreamParameters.sampleFormat = paFloat32;
-        inStreamParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
-        inStreamParameters.hostApiSpecificStreamInfo = nullptr;
+bool AudioEngine::stop() {
+    return inStream && Pa_StopStream(inStream) == paNoError;
+}
 
-        PaError err = Pa_OpenStream(&inStream, &inStreamParameters, nullptr, deviceInfo->defaultSampleRate, framesPerBuffer, paClipOff, 
-            &AudioEngine::paRecordCallback, this);
-        if (err != paNoError) {
-            std::cout << Pa_GetErrorText(err);
-            return false;
-        }
-
-        return true;
+AudioEngine::~AudioEngine() {
+    if (inStream) {
+        Pa_StopStream(inStream);
+        Pa_CloseStream(inStream);
+    }
+    if (initialized) {
+        Pa_Terminate();
     }
 
-    bool start() {
-        return inStream && Pa_StartStream(inStream) == paNoError;
+    free(buffer);
+}
+
+int AudioEngine::paRecordCallback(const void *inputBuffer,
+                            void *outputBuffer, 
+                            unsigned long framesPerBuffer,
+                            const PaStreamCallbackTimeInfo *timeInfo, 
+                            PaStreamCallbackFlags statusFlags, 
+                            void *userData) {
+
+    AudioEngine* self = (AudioEngine*) userData;
+    const SAMPLE *rptr = (const SAMPLE*)inputBuffer;
+    SAMPLE *wptr = &self->buffer[0];
+
+    for (unsigned long i = 0; i < SAMPLES_PER_FFT; i++) {
+        rptr++; // Skip first channel
+        *wptr++ = *rptr++; // Copy input to output
     }
-
-    bool stop() {
-        return inStream && Pa_StopStream(inStream) == paNoError;
-    }
-
-    ~AudioEngine() {
-        if (inStream) {
-            Pa_StopStream(inStream);
-            Pa_CloseStream(inStream);
-        }
-        if (initialized) {
-            Pa_Terminate();
-        }
-
-        free(buffer);
-    }
-
-private:
-    static int paRecordCallback(const void *inputBuffer,
-                                void *outputBuffer, 
-                                unsigned long framesPerBuffer,
-                                const PaStreamCallbackTimeInfo *timeInfo, 
-                                PaStreamCallbackFlags statusFlags, 
-                                void *userData) {
-
-        AudioEngine* self = (AudioEngine*) userData;
-        const float *in = (float*) inputBuffer;
-
-        // Extract data from channel 2;
-        for (int i = 0; i < framesPerBuffer; i++) {
-            self->buffer[i] = in[i * 2 + 1];
-        }
-        
-        return paComplete;
-    }
-
-};
+    
+    return paComplete;
+}

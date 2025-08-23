@@ -14,9 +14,8 @@ find_package(PortAudio REQUIRED)
 
 add_executable(PitchDetector
     main.cpp
-    freq_analysis.cpp
-    freq_analysis.h
     audio_engine.cpp
+    freq_analysis.cpp
 )
 
 target_link_libraries(PitchDetector PRIVATE
