@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 
 #include "portaudio.h"
 #include "freq_analysis.h"
@@ -9,26 +10,39 @@ using std::cout;
 
 void displayNote(const NoteInfo& info, float freq) {
     int totalWidth = 50;
-    int centerPosition = totalWidth / 2;
-    int centsOffset = static_cast<int>(info.cents / 100.0f * (totalWidth / 2));
-    int markerPosition = centerPosition + centsOffset;
-    if (markerPosition < 0) markerPosition = 0;
-    if (markerPosition >= totalWidth) markerPosition = totalWidth - 1;
-    std::string leftBar(totalWidth / 2, '-');
-    std::string rightBar(totalWidth / 2, '-');
-    std::string bar = leftBar + info.name + rightBar;
-    bar[markerPosition] = '*'; // Marker for cents
-    cout << bar << "\t" <<  freq << '\r' << std::flush;
+    std::string bar(totalWidth, '-');
+
+    cout << bar << "\t                     \r";
+
+    if (info.midi != -1) {
+        int centerPosition = totalWidth / 2;
+        int centsOffset = static_cast<int>(info.cents / 100.0f * (totalWidth / 2.0));
+        int markerPosition = centerPosition + centsOffset;
+        if (markerPosition < 0) markerPosition = 0;
+        if (markerPosition >= totalWidth) markerPosition = totalWidth - 1;
+        
+        bar[totalWidth / 2] = '|'; // Center line
+        bar[markerPosition] = '*'; // Marker for cents
+        cout << bar << "\t" << info.name << info.octave << "\t" << std::fixed << std::setprecision(0) << freq << "\r";
+    }
+
+    std::cout.flush();
 }
 
 int main() {
     AudioEngine engine{};
     bool success = engine.init();
     if (!success) {
+        std::cout << "Could not initialize audio engine" << std::endl;
         return -1;
     }
 
     int deviceIndex = engine.findDevice("Focusrite");
+    if (deviceIndex == paNoDevice) {
+        std::cout << "Could not find audio device" << std::endl;
+        return -1;
+    }
+
     PaDeviceInfo const *deviceInfo = Pa_GetDeviceInfo(deviceIndex);
     engine.openStream(deviceIndex);
 
