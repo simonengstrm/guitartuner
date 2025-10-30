@@ -11,15 +11,19 @@ set(CMAKE_CXX_COMPILER "clang++")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g")
 
 find_package(PortAudio REQUIRED)
+find_package(OpenGL REQUIRED)
 
-add_executable(PitchDetector
-    main.cpp
-    audio_engine.cpp
-    freq_analysis.cpp
-)
+# Add all subfolder src
+add_subdirectory(src)
 
 target_link_libraries(PitchDetector PRIVATE
     portaudio
+    OpenGL::GL
+)
+
+target_include_directories(PitchDetector PRIVATE
+    ${PORTAUDIO_INCLUDE_DIRS}
+    ${OPENGL_INCLUDE_DIRS}
 )
 
 if(WIN32)

@@ -1,0 +1,77 @@
+#include <iomanip>
+#include <iostream>
+#include <thread>
+
+#include "audio_engine.h"
+#include "freq_analysis.h"
+#include "portaudio.h"
+
+using std::cout;
+
+void displayNote(const NoteInfo &info, float freq) {
+  int totalWidth = 50;
+  std::string bar(totalWidth, '-');
+
+  cout << bar << "\t                     \r";
+
+  if (info.midi != -1) {
+    int centerPosition = totalWidth / 2;
+    int centsOffset =
+        static_cast<int>(info.cents / 100.0f * (totalWidth / 2.0));
+    int markerPosition = centerPosition + centsOffset;
+    if (markerPosition < 0)
+      markerPosition = 0;
+    if (markerPosition >= totalWidth)
+      markerPosition = totalWidth - 1;
+
+    bar[totalWidth / 2] = '|';  // Center line
+    bar[markerPosition] = '*';  // Marker for cents
+    cout << bar << "\t" << info.name << info.octave << "\t" << std::fixed
+         << std::setprecision(0) << freq << "\r";
+  }
+
+  std::cout.flush();
+}
+
+int main() {
+  AudioEngine engine{};
+  bool success = engine.init();
+  if (!success) {
+    std::cout << "Could not initialize audio engine" << std::endl;
+    return -1;
+  }
+
+  int deviceIndex = engine.findDevice("Focusrite");
+  if (deviceIndex == paNoDevice) {
+    std::cout << "Could not find audio device" << std::endl;
+    return -1;
+  }
+
+  PaDeviceInfo const *deviceInfo = Pa_GetDeviceInfo(deviceIndex);
+  engine.openStream(deviceIndex);
+
+  std::jthread audio_thread([&]() {
+    while (true) {
+      auto started = engine.start();
+      if (!started) {
+        std::cout << "Could not start audio stream" << std::endl;
+        return -1;
+      }
+
+      while (Pa_IsStreamActive(engine.inStream)) {
+        Pa_Sleep(1);
+      }
+
+      auto stopped = engine.stop();
+      if (!stopped) {
+        std::cout << "Could not stop audio stream" << std::endl;
+        return -1;
+      }
+
+      float freq = freqAnalysis(engine.buffer, SAMPLES_PER_FFT,
+                                deviceInfo->defaultSampleRate);
+      NoteInfo note = freqToNote(freq);
+      displayNote(note, freq);
+    }
+  });
+}
