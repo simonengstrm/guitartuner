@@ -8,11 +8,16 @@
 
 #include "portaudio.h"
 
-bool AudioEngine::init() {
+bool AudioEngine::init(std::string deviceNameHint) {
   PaError err = Pa_Initialize();
   if (err != paNoError) {
     std::cout << "Could not initialize audio engine: " << Pa_GetErrorText(err)
               << std::endl;
+    return false;
+  }
+
+  if (deviceIndex = AudioEngine::findDevice(deviceNameHint); deviceIndex == paNoDevice) {
+    std::cout << "Could not find audio device" << std::endl;
     return false;
   }
 
@@ -32,14 +37,13 @@ int AudioEngine::findDevice(std::string deviceNameHint) {
   return paNoDevice;
 }
 
-bool AudioEngine::openStream(int deviceIndex) {
+bool AudioEngine::openStream() {
   if (inStream) {
     return true;
   }
   const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(deviceIndex);
 
-  buffer = (SAMPLE *)malloc(SAMPLES_PER_FFT * sizeof(SAMPLE));
-  memset(buffer, 0, SAMPLES_PER_FFT * sizeof(SAMPLE));
+  memset(buffer.data(), 0, buffer.size() * sizeof(SAMPLE));
 
   inStreamParameters.device = deviceIndex;
   inStreamParameters.channelCount = deviceInfo->maxInputChannels;
@@ -66,6 +70,10 @@ bool AudioEngine::stop() {
   return inStream && Pa_StopStream(inStream) == paNoError;
 }
 
+bool AudioEngine::isActive() {
+  return inStream && Pa_IsStreamActive(inStream) == 1;
+}
+
 AudioEngine::~AudioEngine() {
   if (inStream) {
     Pa_StopStream(inStream);
@@ -74,8 +82,6 @@ AudioEngine::~AudioEngine() {
   if (initialized) {
     Pa_Terminate();
   }
-
-  free(buffer);
 }
 
 int AudioEngine::paRecordCallback(const void *inputBuffer, void *outputBuffer,

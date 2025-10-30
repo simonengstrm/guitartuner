@@ -1,3 +1,4 @@
+#include <csignal>
 #include <iomanip>
 #include <iostream>
 #include <thread>
@@ -7,6 +8,12 @@
 #include "portaudio.h"
 
 using std::cout;
+
+bool shutdown = false;
+
+void signalHandler(int signum) {
+  shutdown = true;
+}
 
 void displayNote(const NoteInfo &info, float freq) {
   int totalWidth = 50;
@@ -34,44 +41,48 @@ void displayNote(const NoteInfo &info, float freq) {
 }
 
 int main() {
+  // Register signal handler for graceful shutdown
+  signal(SIGINT, signalHandler);
+  signal(SIGTERM, signalHandler);
+
   AudioEngine engine{};
-  bool success = engine.init();
-  if (!success) {
+  if (!engine.init("Focusrite")) {
     std::cout << "Could not initialize audio engine" << std::endl;
     return -1;
   }
 
-  int deviceIndex = engine.findDevice("Focusrite");
-  if (deviceIndex == paNoDevice) {
-    std::cout << "Could not find audio device" << std::endl;
+  auto fftCallback = [](const float *buffer,
+                        unsigned long framesPerBuffer,
+                        int sampleRate) {
+    float freq = signalToFreq(buffer, framesPerBuffer,
+                              sampleRate);
+    NoteInfo note = freqToNote(freq);
+    displayNote(note, freq);
+  };
+
+  if (!engine.openStream()) {
+    std::cout << "Could not open audio stream" << std::endl;
     return -1;
   }
 
-  PaDeviceInfo const *deviceInfo = Pa_GetDeviceInfo(deviceIndex);
-  engine.openStream(deviceIndex);
-
-  std::jthread audio_thread([&]() {
-    while (true) {
-      auto started = engine.start();
-      if (!started) {
-        std::cout << "Could not start audio stream" << std::endl;
-        return -1;
-      }
-
-      while (Pa_IsStreamActive(engine.inStream)) {
-        Pa_Sleep(1);
-      }
-
-      auto stopped = engine.stop();
-      if (!stopped) {
-        std::cout << "Could not stop audio stream" << std::endl;
-        return -1;
-      }
-
-      float freq = freqAnalysis(engine.buffer, SAMPLES_PER_FFT,
-                                deviceInfo->defaultSampleRate);
-      NoteInfo note = freqToNote(freq);
-      displayNote(note, freq);
+  while (!shutdown) {
+    if (!engine.start()) {
+      std::cout << "Could not start audio stream" << std::endl;
+      return -1;
     }
-  });
+
+    while (engine.isActive()) {
+      Pa_Sleep(1);
+    }
+
+    if (!engine.stop()) {
+      std::cout << "Could not stop audio stream" << std::endl;
+      return -1;
+    }
+
+    float freq = signalToFreq(engine.getBuffer().data(), SAMPLES_PER_FFT,
+                              engine.getDeviceInfo()->defaultSampleRate);
+    auto note = freqToNote(freq);
+    displayNote(note, freq);
+  }
 }

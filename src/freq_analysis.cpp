@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <complex>
+#include <numbers>
 
 void fft(std::complex<float> *data, unsigned long bufferSize) {
   int n = bufferSize;
@@ -19,7 +20,7 @@ void fft(std::complex<float> *data, unsigned long bufferSize) {
   }
 
   for (int len = 2; len <= n; len <<= 1) {
-    float angle = -2 * M_PI / len;
+    float angle = -2 * std::numbers::pi / len;
     std::complex<float> wlen(cos(angle), sin(angle));
 
     for (int i = 0; i < n; i += len) {
@@ -63,7 +64,7 @@ float findPeakFrequency(const std::complex<float> *fftData,
   return frequency;
 }
 
-float freqAnalysis(const float *buffer, unsigned long bufferSize,
+float signalToFreq(const float *buffer, unsigned long bufferSize,
                    int sampleRate) {
   // Only perform FFT if the amplitude is above a threshold
   float maxAmplitude = 0.0f;

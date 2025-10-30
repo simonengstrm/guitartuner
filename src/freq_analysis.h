@@ -3,8 +3,6 @@
 
 #include <string>
 
-#define M_PI 3.14159265358979323846
-
 struct NoteInfo {
   std::string name;
   int octave;
@@ -13,7 +11,7 @@ struct NoteInfo {
   int midi;
 };
 
-float freqAnalysis(const float *buffer, unsigned long bufferSize,
+float signalToFreq(const float *buffer, unsigned long bufferSize,
                    int sampleRate);
 
 NoteInfo freqToNote(float frequency);
