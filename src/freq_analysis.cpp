@@ -36,8 +36,8 @@ void fft(std::complex<float> *data, unsigned long bufferSize) {
   }
 }
 
-float findPeakFrequency(const std::complex<float> *fftData,
-                        unsigned long bufferSize, int sampleRate) {
+float findPeakFrequency(const std::complex<float> *fftData, unsigned long bufferSize,
+                        int sampleRate) {
   float maxMagnitude = 0.0f;
   unsigned long peakIndex = 0;
 
@@ -52,9 +52,7 @@ float findPeakFrequency(const std::complex<float> *fftData,
   // Neighboring magnitudes
   float magL = (peakIndex > 0) ? std::abs(fftData[peakIndex - 1]) : 0.0f;
   float magC = std::abs(fftData[peakIndex]);
-  float magR = (peakIndex < bufferSize / 2 - 1)
-                   ? std::abs(fftData[peakIndex + 1])
-                   : 0.0f;
+  float magR = (peakIndex < bufferSize / 2 - 1) ? std::abs(fftData[peakIndex + 1]) : 0.0f;
 
   // Interpolation to find a more accurate peak
   float delta = 0.5f * (magL - magR) / (magL - 2 * magC + magR);
@@ -64,8 +62,7 @@ float findPeakFrequency(const std::complex<float> *fftData,
   return frequency;
 }
 
-float signalToFreq(const float *buffer, unsigned long bufferSize,
-                   int sampleRate) {
+float signalToFreq(const float *buffer, unsigned long bufferSize, int sampleRate) {
   // Only perform FFT if the amplitude is above a threshold
   float maxAmplitude = 0.0f;
   for (unsigned long i = 0; i < bufferSize; ++i) {
@@ -101,8 +98,7 @@ float signalToFreq(const float *buffer, unsigned long bufferSize,
 }
 
 NoteInfo freqToNote(float f) {
-  static const char *NAMES[12] = {"C", "C#", "D", "D#", "E", "F",
-                                  "F#", "G", "G#", "A", "A#", "B"};
+  static const char *NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
   if (!(f > 0.0f)) {  // catches <=0, NaN
     return {"", 0, 0.0f, 0.0f, -1};

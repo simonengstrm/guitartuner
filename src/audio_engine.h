@@ -3,15 +3,17 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <mutex>
+#include <thread>
 
+#include "pa_ringbuffer.h"
 #include "portaudio.h"
 
+constexpr unsigned RING_BUFFER_SIZE{16384};
 constexpr unsigned SAMPLES_PER_FFT{2048};
 constexpr unsigned PA_SAMPLE_TYPE{paFloat32};
 
 typedef float SAMPLE;
-
-using engine_buf = std::array<SAMPLE, sizeof(SAMPLE) * SAMPLES_PER_FFT>;
 
 struct AudioEngine {
   bool init(std::string deviceNameHint);
@@ -26,25 +28,31 @@ struct AudioEngine {
 
   bool isActive();
 
-  const PaDeviceInfo *getDeviceInfo() {
-    return Pa_GetDeviceInfo(deviceIndex);
-  }
+  const PaDeviceInfo *getDeviceInfo() { return Pa_GetDeviceInfo(deviceIndex); }
 
-  engine_buf &getBuffer() { return buffer; }
+  PaUtilRingBuffer *getRingBuffer() { return &ringBuffer; }
+
+  void setAudioCallback(
+      std::function<void(const std::array<SAMPLE, SAMPLES_PER_FFT> buffer, unsigned long, int)>
+          callback) {
+    audioCallback = callback;
+  }
 
   ~AudioEngine();
 
  private:
   bool initialized = false;
+  int deviceIndex = -1;
   PaStream *inStream{nullptr};
   PaStreamParameters inStreamParameters{};
-  engine_buf buffer{};
-  int deviceIndex = -1;
+  std::array<SAMPLE, RING_BUFFER_SIZE> ringBufferData{};
+  std::jthread audioThread;
+  std::function<void(const std::array<SAMPLE, SAMPLES_PER_FFT> buffer, unsigned long, int)>
+      audioCallback;
+  PaUtilRingBuffer ringBuffer{};
 
-  static int paRecordCallback(const void *inputBuffer,
-                              void *outputBuffer,
+  static int paRecordCallback(const void *inputBuffer, void *outputBuffer,
                               unsigned long framesPerBuffer,
                               const PaStreamCallbackTimeInfo *timeInfo,
-                              PaStreamCallbackFlags statusFlags,
-                              void *userData);
+                              PaStreamCallbackFlags statusFlags, void *userData);
 };
