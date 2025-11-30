@@ -32,7 +32,7 @@ bool AudioEngine::init(std::string deviceNameHint) {
 int AudioEngine::findDevice(std::string deviceNameHint) {
   int deviceCount = Pa_GetDeviceCount();
   for (int i = 0; i < deviceCount; i++) {
-    const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
+    const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(i);
     std::string deviceName(deviceInfo->name);
     if (deviceName.contains(deviceNameHint) && deviceInfo->maxInputChannels > 0) return i;
   }
@@ -44,7 +44,7 @@ bool AudioEngine::openStream() {
   if (inStream) {
     return true;
   }
-  const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(deviceIndex);
+  const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(deviceIndex);
 
   inStreamParameters.device = deviceIndex;
   inStreamParameters.channelCount = deviceInfo->maxInputChannels;
@@ -92,15 +92,15 @@ bool AudioEngine::stop() {
 
 bool AudioEngine::isActive() { return inStream && Pa_IsStreamActive(inStream) == 1; }
 
-int AudioEngine::paRecordCallback(const void *inputBuffer, void *outputBuffer,
+int AudioEngine::paRecordCallback(const void* inputBuffer, void* outputBuffer,
                                   unsigned long framesPerBuffer,
-                                  const PaStreamCallbackTimeInfo *timeInfo,
-                                  PaStreamCallbackFlags statusFlags, void *userData) {
-  AudioEngine *self = static_cast<AudioEngine *>(userData);
-  const SAMPLE *rptr = static_cast<const SAMPLE *>(inputBuffer);
+                                  const PaStreamCallbackTimeInfo* timeInfo,
+                                  PaStreamCallbackFlags statusFlags, void* userData) {
+  AudioEngine* self = static_cast<AudioEngine*>(userData);
+  const SAMPLE* rptr = static_cast<const SAMPLE*>(inputBuffer);
   // Temporary buffer to store correct channel samples before writing to ring buffer
   std::vector<SAMPLE> tempBuffer(framesPerBuffer);
-  SAMPLE *wptr = tempBuffer.data();
+  SAMPLE* wptr = tempBuffer.data();
   for (unsigned long i = 0; i < SAMPLES_PER_FFT; i++) {
     rptr++;             // Skip first channel
     *wptr++ = *rptr++;  // Copy input to output

@@ -5,7 +5,6 @@
 
 #include "audio_engine.h"
 #include "freq_analysis.h"
-#include "portaudio.h"
 
 using std::cout;
 
@@ -13,8 +12,8 @@ bool shutdown{false};
 
 void signalHandler(int signum) { shutdown = true; }
 
-void printTuner(const NoteInfo &info, float freq) {
-  int totalWidth = 100;
+void printTuner(const NoteInfo& info, float freq) {
+  int totalWidth = 50;
   std::string bar(totalWidth, '-');
 
   cout << bar << "\t                     \r";
@@ -26,22 +25,21 @@ void printTuner(const NoteInfo &info, float freq) {
     if (markerPosition < 0) markerPosition = 0;
     if (markerPosition >= totalWidth) markerPosition = totalWidth - 1;
 
-    bar[totalWidth / 2] = '|';  // Center line
-    bar[markerPosition] = '*';  // Marker for cents
+    bar[totalWidth / 2] = '|';
+    bar[markerPosition] = '*';
     cout << bar << "\t" << info.name << info.octave << "\t" << std::fixed << std::setprecision(0)
          << freq << "\r";
   }
 
-  std::cout.flush();
+  std::cout << std::flush;
 }
 
 int main() {
-  // Register signal handler for graceful shutdown
   signal(SIGINT, signalHandler);
   signal(SIGTERM, signalHandler);
 
   AudioEngine engine{};
-  if (!engine.init("Focusrite")) {
+  if (!engine.init("Scarlett")) {
     std::cout << "Could not initialize audio engine" << std::endl;
     return -1;
   }

@@ -11,7 +11,6 @@ struct NoteInfo {
   int midi;
 };
 
-float signalToFreq(const float *buffer, unsigned long bufferSize,
-                   int sampleRate);
+float signalToFreq(const float* buffer, unsigned long bufferSize, int sampleRate);
 
 NoteInfo freqToNote(float frequency);

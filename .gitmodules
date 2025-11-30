@@ -1,0 +1,3 @@
+[submodule "extern/portaudio"]
+	path = extern/portaudio
+	url = https://github.com/PortAudio/portaudio.git

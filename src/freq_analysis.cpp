@@ -1,12 +1,15 @@
 #include "freq_analysis.h"
 
 #include <algorithm>
+#include <array>
 #include <complex>
+#include <iostream>
 #include <numbers>
 
-void fft(std::complex<float> *data, unsigned long bufferSize) {
-  int n = bufferSize;
+constexpr unsigned long paddedSize = 16384;
 
+void fft(std::array<std::complex<float>, paddedSize>& data) {
+  const int n = data.size();
   for (int i = 1, j = 0; i < n; i++) {
     int bit = n >> 1;
     for (; j & bit; bit >>= 1) {
@@ -36,12 +39,28 @@ void fft(std::complex<float> *data, unsigned long bufferSize) {
   }
 }
 
-float findPeakFrequency(const std::complex<float> *fftData, unsigned long bufferSize,
-                        int sampleRate) {
+size_t harmonicProductSpectrum(std::array<std::complex<float>, paddedSize>& fftData) {
+  // inplace HPS
+  const unsigned long originalSize = fftData.size();
+  const unsigned long hpsSize = originalSize / 8;  // Reduce to 1/8th size
+  for (unsigned long i = 0; i < hpsSize; ++i) {
+    for (unsigned int harmonic = 2; harmonic <= 8; ++harmonic) {
+      unsigned long index = i * harmonic;
+      if (index < originalSize) {
+        fftData[i] *= fftData[index];
+      }
+    }
+  }
+  return hpsSize;
+}
+
+float findPeakFrequency(const std::array<std::complex<float>, paddedSize>& fftData, int sampleRate,
+                        size_t hpsSize) {
+  const unsigned long bufferSize = fftData.size();
   float maxMagnitude = 0.0f;
   unsigned long peakIndex = 0;
 
-  for (unsigned long i = 0; i < bufferSize / 2; ++i) {
+  for (unsigned long i = 0; i < hpsSize; ++i) {
     float magnitude = std::abs(fftData[i]);
     if (magnitude > maxMagnitude) {
       maxMagnitude = magnitude;
@@ -57,13 +76,13 @@ float findPeakFrequency(const std::complex<float> *fftData, unsigned long buffer
   // Interpolation to find a more accurate peak
   float delta = 0.5f * (magL - magR) / (magL - 2 * magC + magR);
 
-  float frequency = (peakIndex + delta) * sampleRate / bufferSize;
+  float frequency = (peakIndex + delta) * sampleRate / hpsSize;
 
   return frequency;
 }
 
-float signalToFreq(const float *buffer, unsigned long bufferSize, int sampleRate) {
-  // Only perform FFT if the amplitude is above a threshold
+float signalToFreq(const float* buffer, unsigned long bufferSize, int sampleRate) {
+  // Only perform FFT if the amplitude is above a threshold (noise gate)
   float maxAmplitude = 0.0f;
   for (unsigned long i = 0; i < bufferSize; ++i) {
     maxAmplitude = std::max(maxAmplitude, std::abs(buffer[i]));
@@ -73,9 +92,7 @@ float signalToFreq(const float *buffer, unsigned long bufferSize, int sampleRate
     return 0.0f;
   }
 
-  unsigned long paddedSize = 8192;
-
-  std::complex<float> *fftInput = new std::complex<float>[paddedSize];
+  std::array<std::complex<float>, paddedSize> fftInput{};
   for (unsigned long i = 0; i < paddedSize; ++i) {
     if (i < bufferSize) {
       fftInput[i] = std::complex<float>(buffer[i], 0.0f);
@@ -84,23 +101,18 @@ float signalToFreq(const float *buffer, unsigned long bufferSize, int sampleRate
     }
   }
 
-  fft(fftInput, paddedSize);
-
-  float frequency = findPeakFrequency(fftInput, paddedSize, sampleRate);
-
-  if (frequency < 50.0f || frequency > 2000.0f) {
-    return 0.0f;
-  }
-
-  delete[] fftInput;
+  fft(fftInput);
+  // const auto hpsSize = harmonicProductSpectrum(fftInput);
+  float frequency = findPeakFrequency(fftInput, sampleRate, fftInput.size());
 
   return frequency;
 }
 
 NoteInfo freqToNote(float f) {
-  static const char *NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+  constexpr std::array<std::string_view, 12> NAMES = {"C",  "C#", "D",  "D#", "E",  "F",
+                                                      "F#", "G",  "G#", "A",  "A#", "B"};
 
-  if (!(f > 0.0f)) {  // catches <=0, NaN
+  if (f <= 0.0f) {
     return {"", 0, 0.0f, 0.0f, -1};
   }
 
