@@ -2,14 +2,26 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <complex>
-#include <iostream>
 #include <numbers>
 
-constexpr unsigned long paddedSize = 16384;
+void hannWindow(float* buffer, unsigned long bufferSize) {
+  for (unsigned long i = 0; i < bufferSize; ++i) {
+    buffer[i] *= 0.5f - 0.5f * std::cos(2 * std::numbers::pi * i / (bufferSize - 1));
+  }
+}
 
-void fft(std::array<std::complex<float>, paddedSize>& data) {
-  const int n = data.size();
+void fft(const float* buffer, unsigned long bufferSize, FFTData& output) {
+  for (unsigned long i = 0; i < output.size(); ++i) {
+    if (i < bufferSize) {
+      output[i] = std::complex<float>(buffer[i], 0.0f);
+    } else {
+      output[i] = std::complex<float>(0.0f, 0.0f);  // Zero padding
+    }
+  }
+
+  const int n = output.size();
   for (int i = 1, j = 0; i < n; i++) {
     int bit = n >> 1;
     for (; j & bit; bit >>= 1) {
@@ -18,7 +30,7 @@ void fft(std::array<std::complex<float>, paddedSize>& data) {
 
     j ^= bit;
     if (i < j) {
-      std::swap(data[i], data[j]);
+      std::swap(output[i], output[j]);
     }
   }
 
@@ -29,38 +41,32 @@ void fft(std::array<std::complex<float>, paddedSize>& data) {
     for (int i = 0; i < n; i += len) {
       std::complex<float> w(1);
       for (int j = 0; j < len / 2; j++) {
-        std::complex<float> u = data[i + j];
-        std::complex<float> v = data[i + j + len / 2] * w;
-        data[i + j] = u + v;
-        data[i + j + len / 2] = u - v;
+        std::complex<float> u = output[i + j];
+        std::complex<float> v = output[i + j + len / 2] * w;
+        output[i + j] = u + v;
+        output[i + j + len / 2] = u - v;
         w *= wlen;
       }
     }
   }
 }
 
-size_t harmonicProductSpectrum(std::array<std::complex<float>, paddedSize>& fftData) {
-  // inplace HPS
-  const unsigned long originalSize = fftData.size();
-  const unsigned long hpsSize = originalSize / 8;  // Reduce to 1/8th size
-  for (unsigned long i = 0; i < hpsSize; ++i) {
-    for (unsigned int harmonic = 2; harmonic <= 8; ++harmonic) {
-      unsigned long index = i * harmonic;
-      if (index < originalSize) {
-        fftData[i] *= fftData[index];
-      }
+void harmonicProductSpectrum(FFTData& fftData, unsigned long factor) {
+  const unsigned long size = fftData.size();
+  for (unsigned long i = 0; i < size / factor; ++i) {
+    for (unsigned long j = 2; j <= factor; ++j) {
+      fftData[i] *= fftData[i * j];
     }
   }
-  return hpsSize;
 }
 
-float findPeakFrequency(const std::array<std::complex<float>, paddedSize>& fftData, int sampleRate,
-                        size_t hpsSize) {
+float findPeakFrequency(const std::array<std::complex<float>, paddedSize>& fftData,
+                        int sampleRate) {
   const unsigned long bufferSize = fftData.size();
   float maxMagnitude = 0.0f;
   unsigned long peakIndex = 0;
 
-  for (unsigned long i = 0; i < hpsSize; ++i) {
+  for (unsigned long i = 0; i < fftData.size(); ++i) {
     float magnitude = std::abs(fftData[i]);
     if (magnitude > maxMagnitude) {
       maxMagnitude = magnitude;
@@ -76,34 +82,28 @@ float findPeakFrequency(const std::array<std::complex<float>, paddedSize>& fftDa
   // Interpolation to find a more accurate peak
   float delta = 0.5f * (magL - magR) / (magL - 2 * magC + magR);
 
-  float frequency = (peakIndex + delta) * sampleRate / hpsSize;
+  float frequency = (peakIndex + delta) * sampleRate / fftData.size();
 
   return frequency;
 }
 
-float signalToFreq(const float* buffer, unsigned long bufferSize, int sampleRate) {
-  // Only perform FFT if the amplitude is above a threshold (noise gate)
+float findMaxAmplitude(const float* buffer, unsigned long bufferSize) {
   float maxAmplitude = 0.0f;
   for (unsigned long i = 0; i < bufferSize; ++i) {
     maxAmplitude = std::max(maxAmplitude, std::abs(buffer[i]));
   }
+  return maxAmplitude;
+}
 
-  if (maxAmplitude < 0.01f) {  // Threshold to avoid noise
+float signalToFreq(const float* buffer, unsigned long bufferSize, int sampleRate) {
+  // Only perform FFT if the amplitude is above a threshold (noise gate)
+  if (findMaxAmplitude(buffer, bufferSize) < 0.01f) {  // Threshold to avoid noise
     return 0.0f;
   }
 
-  std::array<std::complex<float>, paddedSize> fftInput{};
-  for (unsigned long i = 0; i < paddedSize; ++i) {
-    if (i < bufferSize) {
-      fftInput[i] = std::complex<float>(buffer[i], 0.0f);
-    } else {
-      fftInput[i] = std::complex<float>(0.0f, 0.0f);  // Zero padding
-    }
-  }
-
-  fft(fftInput);
-  // const auto hpsSize = harmonicProductSpectrum(fftInput);
-  float frequency = findPeakFrequency(fftInput, sampleRate, fftInput.size());
+  FFTData fftOutput{};
+  fft(buffer, bufferSize, fftOutput);
+  float frequency = findPeakFrequency(fftOutput, sampleRate);
 
   return frequency;
 }

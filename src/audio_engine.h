@@ -10,7 +10,9 @@ constexpr unsigned RING_BUFFER_SIZE{16384};
 constexpr unsigned SAMPLES_PER_FFT{8192};
 constexpr unsigned PA_SAMPLE_TYPE{paFloat32};
 
-typedef float SAMPLE;
+using SAMPLE = float;
+using audioCallback_t =
+    std::function<void(std::array<SAMPLE, SAMPLES_PER_FFT> buffer, unsigned long, int)>;
 
 struct AudioEngine {
   bool init(std::string deviceNameHint);
@@ -29,11 +31,7 @@ struct AudioEngine {
 
   PaUtilRingBuffer* getRingBuffer() { return &ringBuffer; }
 
-  void setAudioCallback(
-      std::function<void(const std::array<SAMPLE, SAMPLES_PER_FFT> buffer, unsigned long, int)>
-          callback) {
-    audioCallback = callback;
-  }
+  void setAudioCallback(audioCallback_t callback) { audioCallback = callback; }
 
   ~AudioEngine();
 
@@ -44,8 +42,7 @@ struct AudioEngine {
   PaStreamParameters inStreamParameters{};
   std::array<SAMPLE, RING_BUFFER_SIZE> ringBufferData{};
   std::jthread audioThread;
-  std::function<void(const std::array<SAMPLE, SAMPLES_PER_FFT> buffer, unsigned long, int)>
-      audioCallback;
+  audioCallback_t audioCallback;
   PaUtilRingBuffer ringBuffer{};
 
   static int paRecordCallback(const void* inputBuffer, void* outputBuffer,

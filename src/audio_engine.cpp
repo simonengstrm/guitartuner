@@ -65,7 +65,6 @@ bool AudioEngine::openStream() {
 bool AudioEngine::start() {
   audioThread = std::jthread([this]() {
     while (audioThread.get_stop_token().stop_requested() == false) {
-      const auto available = PaUtil_GetRingBufferReadAvailable(&ringBuffer);
       std::array<SAMPLE, SAMPLES_PER_FFT> tempBuffer;
       if (PaUtil_GetRingBufferReadAvailable(&ringBuffer) >= SAMPLES_PER_FFT) {
         PaUtil_ReadRingBuffer(&ringBuffer, tempBuffer.data(), SAMPLES_PER_FFT * sizeof(SAMPLE));
@@ -92,10 +91,13 @@ bool AudioEngine::stop() {
 
 bool AudioEngine::isActive() { return inStream && Pa_IsStreamActive(inStream) == 1; }
 
-int AudioEngine::paRecordCallback(const void* inputBuffer, void* outputBuffer,
+// This function is kind of tailored to my focusrite scarlett 2i2 which has 2 input channels
+// where channel 0 is mic input and channel 1 is instrument input, so i skip channel 0
+int AudioEngine::paRecordCallback(const void* inputBuffer, [[maybe_unused]] void* outputBuffer,
                                   unsigned long framesPerBuffer,
-                                  const PaStreamCallbackTimeInfo* timeInfo,
-                                  PaStreamCallbackFlags statusFlags, void* userData) {
+                                  [[maybe_unused]] const PaStreamCallbackTimeInfo* timeInfo,
+                                  [[maybe_unused]] PaStreamCallbackFlags statusFlags,
+                                  void* userData) {
   AudioEngine* self = static_cast<AudioEngine*>(userData);
   const SAMPLE* rptr = static_cast<const SAMPLE*>(inputBuffer);
   // Temporary buffer to store correct channel samples before writing to ring buffer
