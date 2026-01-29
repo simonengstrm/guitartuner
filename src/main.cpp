@@ -1,5 +1,7 @@
+#include <raylib.h>
+
 #include <algorithm>
-#include <complex>
+#include <cmath>
 #include <csignal>
 #include <iomanip>
 #include <iostream>
@@ -7,6 +9,7 @@
 
 #include "audio_engine.h"
 #include "freq_analysis.h"
+#include "gui.h"
 
 using std::cout;
 
@@ -40,6 +43,9 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, signalHandler);
   signal(SIGTERM, signalHandler);
 
+  GUI gui{};
+  gui.initialize();
+
   AudioEngine engine{};
   std::string deviceName = argc > 1 ? argv[1] : "Scarlett";
   if (!engine.init(deviceName)) {
@@ -47,11 +53,11 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  auto tunerCallback = [](const std::array<SAMPLE, SAMPLES_PER_FFT> buffer,
-                          unsigned long bufferSize, int sampleRate) {
-    if (findMaxAmplitude(buffer.data(), bufferSize) < 0.01f) {  // Threshold to avoid noise
-      return;
-    }
+  auto tunerCallback = [&](const std::array<SAMPLE, SAMPLES_PER_FFT> buffer,
+                           unsigned long bufferSize, [[maybe_unused]] int sampleRate) {
+    // if (findMaxAmplitude(buffer.data(), bufferSize) < 0.01f) {  // Threshold to avoid noise
+    //   return;
+    // }
 
     std::array<SAMPLE, SAMPLES_PER_FFT> copiedBuffer{};
     std::copy(buffer.begin(), buffer.end(), copiedBuffer.begin());
@@ -59,9 +65,10 @@ int main(int argc, char* argv[]) {
     hannWindow(copiedBuffer.data(), copiedBuffer.size());
     FFTData fftOutput{};
     fft(copiedBuffer.data(), copiedBuffer.size(), fftOutput);
-    float frequency = findPeakFrequency(fftOutput, sampleRate);
-    NoteInfo note = freqToNote(frequency);
-    printTuner(note, frequency);
+    gui.setNewSpectrumData(fftOutput);
+    // float frequency = findPeakFrequency(fftOutput, sampleRate);
+    // NoteInfo note = freqToNote(frequency);
+    // printTuner(note, frequency);
   };
 
   if (!engine.openStream()) {
@@ -76,9 +83,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  while (engine.isActive() && !shutdown) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
+  gui.mainLoop();
 
   if (!engine.stop()) {
     std::cout << "Could not stop audio stream\n";

@@ -51,6 +51,7 @@ bool AudioEngine::openStream() {
   inStreamParameters.sampleFormat = PA_SAMPLE_TYPE;
   inStreamParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
   inStreamParameters.hostApiSpecificStreamInfo = NULL;
+  std::cout << "default sample rate: " << deviceInfo->defaultSampleRate << std::endl;
 
   PaError err = Pa_OpenStream(&inStream, &inStreamParameters, NULL, deviceInfo->defaultSampleRate,
                               SAMPLES_PER_FFT, paClipOff, &AudioEngine::paRecordCallback, this);

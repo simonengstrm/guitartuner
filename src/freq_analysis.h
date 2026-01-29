@@ -1,6 +1,8 @@
 #pragma once
 #include <portaudio.h>
 
+#include <array>
+#include <complex>
 #include <string>
 
 constexpr unsigned long paddedSize = 16384;
