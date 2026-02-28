@@ -95,7 +95,7 @@ float findMaxAmplitude(const float* buffer, unsigned long bufferSize) {
   return maxAmplitude;
 }
 
-float signalToFreq(const float* buffer, unsigned long bufferSize, int sampleRate) {
+float pitchDetection(const float* buffer, unsigned long bufferSize, int sampleRate) {
   // Only perform FFT if the amplitude is above a threshold (noise gate)
   if (findMaxAmplitude(buffer, bufferSize) < 0.01f) {  // Threshold to avoid noise
     return 0.0f;

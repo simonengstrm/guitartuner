@@ -1,7 +1,6 @@
 #include <raylib.h>
 
 #include <algorithm>
-#include <cmath>
 #include <csignal>
 #include <iomanip>
 #include <iostream>
@@ -43,9 +42,6 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, signalHandler);
   signal(SIGTERM, signalHandler);
 
-  GUI gui{};
-  gui.initialize();
-
   AudioEngine engine{};
   std::string deviceName = argc > 1 ? argv[1] : "Scarlett";
   if (!engine.init(deviceName)) {
@@ -53,8 +49,13 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  auto tunerCallback = [&](const std::array<SAMPLE, SAMPLES_PER_FFT> buffer,
-                           unsigned long bufferSize, [[maybe_unused]] int sampleRate) {
+  // Get sample rate
+  const auto sampleRate = engine.getDeviceInfo()->defaultSampleRate;
+  GUI gui{static_cast<unsigned long>(sampleRate)};
+  gui.initialize();
+
+  auto callback = [&](const std::array<SAMPLE, SAMPLES_PER_FFT> buffer, unsigned long bufferSize,
+                      [[maybe_unused]] int sampleRate) {
     // if (findMaxAmplitude(buffer.data(), bufferSize) < 0.01f) {  // Threshold to avoid noise
     //   return;
     // }
@@ -66,6 +67,7 @@ int main(int argc, char* argv[]) {
     FFTData fftOutput{};
     fft(copiedBuffer.data(), copiedBuffer.size(), fftOutput);
     gui.setNewSpectrumData(fftOutput);
+
     // float frequency = findPeakFrequency(fftOutput, sampleRate);
     // NoteInfo note = freqToNote(frequency);
     // printTuner(note, frequency);
@@ -76,7 +78,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  engine.setAudioCallback(tunerCallback);
+  engine.setAudioCallback(callback);
 
   if (!engine.start()) {
     std::cout << "Could not start audio stream\n";
