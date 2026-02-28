@@ -53,8 +53,9 @@ bool AudioEngine::openStream() {
   inStreamParameters.hostApiSpecificStreamInfo = NULL;
   std::cout << "default sample rate: " << deviceInfo->defaultSampleRate << std::endl;
 
-  PaError err = Pa_OpenStream(&inStream, &inStreamParameters, NULL, deviceInfo->defaultSampleRate,
-                              SAMPLES_PER_FFT, paClipOff, &AudioEngine::paRecordCallback, this);
+  PaError err =
+      Pa_OpenStream(&inStream, &inStreamParameters, NULL, deviceInfo->defaultSampleRate,
+                    SAMPLES_PER_CALLBACK, paClipOff, &AudioEngine::paRecordCallback, this);
   if (err != paNoError) {
     std::cout << Pa_GetErrorText(err);
     return false;
@@ -66,11 +67,12 @@ bool AudioEngine::openStream() {
 bool AudioEngine::start() {
   audioThread = std::jthread([this]() {
     while (audioThread.get_stop_token().stop_requested() == false) {
-      std::array<SAMPLE, SAMPLES_PER_FFT> tempBuffer;
-      if (PaUtil_GetRingBufferReadAvailable(&ringBuffer) >= SAMPLES_PER_FFT) {
-        PaUtil_ReadRingBuffer(&ringBuffer, tempBuffer.data(), SAMPLES_PER_FFT * sizeof(SAMPLE));
+      std::array<SAMPLE, SAMPLES_PER_CALLBACK> tempBuffer;
+      if (PaUtil_GetRingBufferReadAvailable(&ringBuffer) >= SAMPLES_PER_CALLBACK) {
+        PaUtil_ReadRingBuffer(&ringBuffer, tempBuffer.data(),
+                              SAMPLES_PER_CALLBACK * sizeof(SAMPLE));
         if (audioCallback) {
-          audioCallback(tempBuffer, SAMPLES_PER_FFT,
+          audioCallback(tempBuffer, SAMPLES_PER_CALLBACK,
                         static_cast<int>(getDeviceInfo()->defaultSampleRate));
         }
       } else {
@@ -104,7 +106,7 @@ int AudioEngine::paRecordCallback(const void* inputBuffer, [[maybe_unused]] void
   // Temporary buffer to store correct channel samples before writing to ring buffer
   std::vector<SAMPLE> tempBuffer(framesPerBuffer);
   SAMPLE* wptr = tempBuffer.data();
-  for (unsigned long i = 0; i < SAMPLES_PER_FFT; i++) {
+  for (unsigned long i = 0; i < SAMPLES_PER_CALLBACK; i++) {
     rptr++;             // Skip first channel
     *wptr++ = *rptr++;  // Copy input to output
   }

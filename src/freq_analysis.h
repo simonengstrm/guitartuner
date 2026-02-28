@@ -26,5 +26,6 @@ struct NoteInfo {
   float cents;
   float noteFreq;
   int midi;
+  float inputFreq;
 };
 NoteInfo freqToNote(float frequency);

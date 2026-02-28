@@ -113,12 +113,12 @@ NoteInfo freqToNote(float f) {
                                                       "F#", "G",  "G#", "A",  "A#", "B"};
 
   if (f <= 0.0f) {
-    return {"", 0, 0.0f, 0.0f, -1};
+    return {"", 0, 0.0f, 0.0f, -1, f};
   }
 
   float m = 69.0f + 12.0f * std::log2(f / 440.0f);
   if (!std::isfinite(m)) {
-    return {"", 0, 0.0f, 0.0f, -1};
+    return {"", 0, 0.0f, 0.0f, -1, f};
   }
 
   int midi = (int)std::lround(m);
@@ -130,5 +130,5 @@ NoteInfo freqToNote(float f) {
   float noteFreq = 440.0f * std::pow(2.0f, (midi - 69) / 12.0f);
   float cents = 1200.0f * std::log2(f / noteFreq);
 
-  return {std::string(NAMES[idx]), oct, cents, noteFreq, midi};
+  return {std::string(NAMES[idx]), oct, cents, noteFreq, midi, f};
 }

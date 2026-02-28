@@ -54,23 +54,21 @@ int main(int argc, char* argv[]) {
   GUI gui{static_cast<unsigned long>(sampleRate)};
   gui.initialize();
 
-  auto callback = [&](const std::array<SAMPLE, SAMPLES_PER_FFT> buffer, unsigned long bufferSize,
+  auto callback = [&](std::array<SAMPLE, SAMPLES_PER_CALLBACK> buffer, unsigned long bufferSize,
                       [[maybe_unused]] int sampleRate) {
     // if (findMaxAmplitude(buffer.data(), bufferSize) < 0.01f) {  // Threshold to avoid noise
     //   return;
     // }
 
-    std::array<SAMPLE, SAMPLES_PER_FFT> copiedBuffer{};
-    std::copy(buffer.begin(), buffer.end(), copiedBuffer.begin());
-
-    hannWindow(copiedBuffer.data(), copiedBuffer.size());
+    hannWindow(buffer.data(), bufferSize);
     FFTData fftOutput{};
-    fft(copiedBuffer.data(), copiedBuffer.size(), fftOutput);
-    gui.setNewSpectrumData(fftOutput);
+    fft(buffer.data(), bufferSize, fftOutput);
 
-    // float frequency = findPeakFrequency(fftOutput, sampleRate);
-    // NoteInfo note = freqToNote(frequency);
-    // printTuner(note, frequency);
+    float frequency = findPeakFrequency(fftOutput, sampleRate);
+    NoteInfo note = freqToNote(frequency);
+
+    gui.setNewSpectrumData(std::move(fftOutput));
+    gui.setTunerData(note);
   };
 
   if (!engine.openStream()) {

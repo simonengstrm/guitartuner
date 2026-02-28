@@ -5,20 +5,24 @@
 #include "raylib.h"
 
 void GUI::initialize() {
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(GUI_WIDTH, GUI_HEIGHT, "Visualizer");
   SetTargetFPS(60);
 }
 
 void GUI::UpdateSpectrogramData() {
-  std::vector<float> magnitudes;
-  std::lock_guard<std::mutex> lock(spectrumMutex);
+  if (!newSpectrumAvailable.exchange(false, std::memory_order_acquire)) {
+    return;  // No new data available
+  }
 
-  const size_t fftSize = currentSpectrum.size();
+  std::vector<float> magnitudes;
+
+  const size_t fftSize = frontSpectrum.size();
   const size_t halfSize = fftSize / 2;
   magnitudes.resize(halfSize);
 
   for (unsigned long i = 0; i < halfSize; ++i) {
-    float magnitude = std::abs(currentSpectrum[i]);
+    float magnitude = std::abs(frontSpectrum[i]);
     float dbMagnitude = 20.0f * log10f(magnitude + 1e-6f);
     magnitudes[i] = dbMagnitude;
   }
@@ -30,7 +34,7 @@ void GUI::UpdateSpectrogramData() {
   spectrogramHistory.push_back(magnitudes);
 }
 
-void DrawGridLines(float min_f, float max_f) {
+void GUI::DrawGridLines() {
   std::vector<float> octaveFreqs = {55.0f, 110.0f, 220.0f, 440.0f, 880.0f, 1760.0f, 3520.0f};
   const float logMin = log10f(min_f);
   const float logMax = log10f(max_f);
@@ -39,20 +43,19 @@ void DrawGridLines(float min_f, float max_f) {
     if (freq < min_f || freq > max_f) continue;
 
     float yNorm = (log10f(freq) - logMin) / (logMax - logMin);
-    float y = GUI_HEIGHT - (yNorm * GUI_HEIGHT);
+    float y = spectrogramHeight - (yNorm * spectrogramHeight);
 
-    DrawLine(0, (int)y, GUI_WIDTH, (int)y, BROWN);
+    DrawLine(widthMargins / 2, (int)y + heightMargins / 2, spectrogramWidth + widthMargins / 2,
+             (int)y + heightMargins / 2, GRAY);
 
     // Optional label
-    DrawText(TextFormat("%.0f Hz", freq), 5, (int)y - 14, 14, GRAY);
+    DrawText(TextFormat("%.1f Hz", freq), widthMargins / 4, (int)y + heightMargins / 2 - 10, 10,
+             LIGHTGRAY);
   }
 }
 
-void GUI::DrawSpectrogram(float min_f, float max_f) {
-  const float logMin = log10f(min_f);
-  const float logMax = log10f(max_f);
-
-  const float xStep = (float)(GUI_WIDTH) / (float)maxHistorySize;
+void GUI::DrawSpectrogram() {
+  const float xStep = (float)(spectrogramWidth) / (float)maxHistorySize;
   for (size_t t = 0; t < spectrogramHistory.size(); ++t) {
     const auto& row = spectrogramHistory[t];
     float x = t * xStep;
@@ -66,42 +69,44 @@ void GUI::DrawSpectrogram(float min_f, float max_f) {
 
       if (freq < min_f || freq > max_f) continue;
 
-      // ---- Log mapping ----
+      // Map to log
       float yNorm = (log10f(freq) - logMin) / (logMax - logMin);
       float yNextNorm = (log10f(nextFreq) - logMin) / (logMax - logMin);
 
       if (yNorm < 0.0f || yNorm > 1.0f) continue;
 
-      float y = GUI_HEIGHT - (yNorm * GUI_HEIGHT);
-      float yNext = GUI_HEIGHT - (yNextNorm * GUI_HEIGHT);
+      float y = spectrogramHeight - (yNorm * spectrogramHeight);
+      float yNext = spectrogramHeight - (yNextNorm * spectrogramHeight);
 
       float rectHeight = std::abs(yNext - y);
       if (rectHeight < 1.0f) rectHeight = 1.0f;
 
-      // ---- dB scaling ----
+      // Color calc
       float db = row[bin];
       float intensity = (db + 100.0f) / 100.0f;
       intensity = std::clamp(intensity, 0.0f, 1.0f);
 
       Color c = ColorFromHSV(240.0f - intensity * 240.0f, 1.0f, intensity);
-
-      DrawRectangle((int)x, (int)yNext, (int)xStep + 1, (int)rectHeight + 1, c);
+      if (intensity > 0.15f) {
+        DrawRectangle((int)x + widthMargins / 2, (int)yNext + heightMargins / 2, (int)xStep + 1,
+                      (int)rectHeight + 1, c);
+      }
     }
   }
 }
+
+void GUI::DrawTuner() {}
 
 void GUI::mainLoop() {
   while (!WindowShouldClose()) {
     BeginDrawing();
     ClearBackground(BLACK);
-
-    constexpr float min_f = 70.0f;
-    constexpr float max_f = 4000.0f;
-
     UpdateSpectrogramData();
 
-    DrawSpectrogram(min_f, max_f);
-    DrawGridLines(min_f, max_f);
+    DrawSpectrogram();
+    // DrawGridLines();
+
+    // DrawTuner();
 
     EndDrawing();
   }
