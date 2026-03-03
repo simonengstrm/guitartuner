@@ -1,10 +1,8 @@
 #include <raylib.h>
 
-#include <algorithm>
 #include <csignal>
 #include <iomanip>
 #include <iostream>
-#include <thread>
 
 #include "audio_engine.h"
 #include "freq_analysis.h"
@@ -56,10 +54,6 @@ int main(int argc, char* argv[]) {
 
   auto callback = [&](std::array<SAMPLE, SAMPLES_PER_CALLBACK> buffer, unsigned long bufferSize,
                       [[maybe_unused]] int sampleRate) {
-    // if (findMaxAmplitude(buffer.data(), bufferSize) < 0.01f) {  // Threshold to avoid noise
-    //   return;
-    // }
-
     hannWindow(buffer.data(), bufferSize);
     FFTData fftOutput{};
     fft(buffer.data(), bufferSize, fftOutput);

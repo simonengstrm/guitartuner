@@ -1,8 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <mutex>
-#include <queue>
 #include <vector>
 
 #include "freq_analysis.h"

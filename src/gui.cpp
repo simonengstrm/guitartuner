@@ -45,12 +45,10 @@ void GUI::DrawGridLines() {
     float yNorm = (log10f(freq) - logMin) / (logMax - logMin);
     float y = spectrogramHeight - (yNorm * spectrogramHeight);
 
-    DrawLine(widthMargins / 2, (int)y + heightMargins / 2, spectrogramWidth + widthMargins / 2,
-             (int)y + heightMargins / 2, GRAY);
+    DrawLine(widthMargins / 2, (int)y, spectrogramWidth + widthMargins / 2, (int)y, GRAY);
 
     // Optional label
-    DrawText(TextFormat("%.1f Hz", freq), widthMargins / 4, (int)y + heightMargins / 2 - 10, 10,
-             LIGHTGRAY);
+    DrawText(TextFormat("%.1f Hz", freq), widthMargins / 2 - 30, (int)y - 5, 10, LIGHTGRAY);
   }
 }
 
@@ -88,14 +86,34 @@ void GUI::DrawSpectrogram() {
 
       Color c = ColorFromHSV(240.0f - intensity * 240.0f, 1.0f, intensity);
       if (intensity > 0.15f) {
-        DrawRectangle((int)x + widthMargins / 2, (int)yNext + heightMargins / 2, (int)xStep + 1,
-                      (int)rectHeight + 1, c);
+        DrawRectangle((int)x + widthMargins / 2, (int)yNext, (int)xStep + 1, (int)rectHeight + 1,
+                      c);
       }
     }
   }
 }
 
-void GUI::DrawTuner() {}
+void GUI::DrawTuner() {
+  std::string noteText = "Note: " + currentNote.name + std::to_string(currentNote.octave);
+  DrawText(noteText.c_str(), widthMargins / 2, spectrogramHeight + heightMargins / 2 + 10, 20,
+           LIGHTGRAY);
+
+  // Draw tuning bar
+  DrawLine(widthMargins / 2, spectrogramHeight + heightMargins / 2, tunerWidth + widthMargins / 2,
+           spectrogramHeight + heightMargins / 2, GRAY);
+
+  int centerX = tunerWidth / 2;
+  int centsOffset = static_cast<int>(currentNote.cents / 100.0f * (tunerWidth / 2.0));
+  int markerPosition = centerX + centsOffset;
+
+  DrawLine(widthMargins / 2 + centerX, spectrogramHeight + heightMargins / 2 - 10,
+           widthMargins / 2 + centerX, spectrogramHeight + heightMargins / 2 + 10, LIGHTGRAY);
+
+  bool inTune = std::abs(currentNote.cents) < 5.0f;  // Within 5 cents is considered in tune
+  DrawLine(widthMargins / 2 + markerPosition, spectrogramHeight + heightMargins / 2 - 15,
+           widthMargins / 2 + markerPosition, spectrogramHeight + heightMargins / 2 + 15,
+           inTune ? GREEN : RED);
+}
 
 void GUI::mainLoop() {
   while (!WindowShouldClose()) {
@@ -104,9 +122,8 @@ void GUI::mainLoop() {
     UpdateSpectrogramData();
 
     DrawSpectrogram();
-    // DrawGridLines();
-
-    // DrawTuner();
+    DrawGridLines();
+    DrawTuner();
 
     EndDrawing();
   }
